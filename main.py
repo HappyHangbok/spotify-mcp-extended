@@ -92,7 +92,7 @@ def spotify_add_to_queue(uri: str, device_id: str | None = None) -> str:
     if device_id:
         params["device_id"] = device_id
     resp = _api("POST", "/me/player/queue", params=params)
-    if resp.status_code == 204:
+    if resp.status_code in (200, 204):
         return f"Added to queue: {uri}"
     return f"Error: {resp.status_code} — {resp.text}"
 
