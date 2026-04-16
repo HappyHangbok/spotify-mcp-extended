@@ -123,72 +123,6 @@ def spotify_get_queue() -> str:
 
 
 @server.tool()
-def spotify_create_playlist(
-    name: str,
-    description: str = "",
-    public: bool = False,
-    track_uris: list[str] | None = None,
-) -> str:
-    """Create a new playlist and optionally add tracks.
-
-    Args:
-        name: Playlist name
-        description: Playlist description
-        public: Whether the playlist is public
-        track_uris: List of Spotify track URIs to add
-    """
-    # Get current user ID
-    resp = _api("GET", "/me")
-    if resp.status_code != 200:
-        return f"Error getting user: {resp.status_code}"
-    user_id = resp.json()["id"]
-
-    resp = _api(
-        "POST",
-        f"/users/{user_id}/playlists",
-        json={"name": name, "description": description, "public": public},
-    )
-    if resp.status_code not in (200, 201):
-        return f"Error creating playlist: {resp.status_code} — {resp.text}"
-    playlist = resp.json()
-    result = f"Created playlist: **{playlist['name']}**\nURI: `{playlist['uri']}`"
-
-    if track_uris:
-        # Add tracks in batches of 100
-        for i in range(0, len(track_uris), 100):
-            batch = track_uris[i : i + 100]
-            add_resp = _api(
-                "POST",
-                f"/playlists/{playlist['id']}/tracks",
-                json={"uris": batch},
-            )
-            if add_resp.status_code != 201:
-                result += f"\nWarning: Failed to add some tracks: {add_resp.text}"
-        result += f"\nAdded {len(track_uris)} track(s)."
-    return result
-
-
-@server.tool()
-def spotify_add_to_playlist(playlist_id: str, track_uris: list[str]) -> str:
-    """Add tracks to an existing playlist.
-
-    Args:
-        playlist_id: Spotify playlist ID
-        track_uris: List of Spotify track URIs to add
-    """
-    for i in range(0, len(track_uris), 100):
-        batch = track_uris[i : i + 100]
-        resp = _api(
-            "POST",
-            f"/playlists/{playlist_id}/tracks",
-            json={"uris": batch},
-        )
-        if resp.status_code != 201:
-            return f"Error: {resp.status_code} — {resp.text}"
-    return f"Added {len(track_uris)} track(s) to playlist."
-
-
-@server.tool()
 def spotify_my_playlists(limit: int = 20) -> str:
     """Get the current user's playlists.
 
@@ -286,6 +220,32 @@ def spotify_get_track(track_id: str) -> str:
         f"URI: `{t['uri']}`\n"
         f"ID: `{t['id']}`"
     )
+
+
+@server.tool()
+def spotify_liked_tracks(limit: int = 20, offset: int = 0) -> str:
+    """Get the user's liked (saved) tracks.
+
+    Args:
+        limit: Number of tracks (1-50, default 20)
+        offset: Starting position (default 0)
+    """
+    resp = _api(
+        "GET",
+        "/me/tracks",
+        params={"limit": min(max(limit, 1), 50), "offset": max(offset, 0)},
+    )
+    if resp.status_code != 200:
+        return f"Error: {resp.status_code} — {resp.text}"
+    data = resp.json()
+    total = data.get("total", 0)
+    items = data.get("items", [])
+    lines = [f"Liked tracks ({offset + 1}-{offset + len(items)} of {total}):\n"]
+    for i, item in enumerate(items, offset + 1):
+        t = item["track"]
+        artists = ", ".join(a["name"] for a in t.get("artists", []))
+        lines.append(f"{i}. **{t['name']}** by {artists} — `{t['uri']}`")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
