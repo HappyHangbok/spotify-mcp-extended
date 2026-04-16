@@ -123,48 +123,6 @@ def spotify_get_queue() -> str:
 
 
 @server.tool()
-def spotify_get_artist_top_tracks(artist_id: str) -> str:
-    """Get an artist's top tracks (useful for finding similar music).
-
-    Args:
-        artist_id: Spotify artist ID
-    """
-    resp = _api("GET", f"/artists/{artist_id}/top-tracks")
-    if resp.status_code != 200:
-        return f"Error: {resp.status_code} — {resp.text}"
-    tracks = resp.json().get("tracks", [])
-    lines = [f"Top tracks ({len(tracks)}):\n"]
-    for i, t in enumerate(tracks, 1):
-        artists = ", ".join(a["name"] for a in t.get("artists", []))
-        lines.append(
-            f"{i}. **{t['name']}** by {artists}\n"
-            f"   URI: `{t['uri']}` | Popularity: {t.get('popularity', '?')}/100"
-        )
-    return "\n".join(lines)
-
-
-@server.tool()
-def spotify_get_related_artists(artist_id: str) -> str:
-    """Get artists related to a given artist.
-
-    Args:
-        artist_id: Spotify artist ID
-    """
-    resp = _api("GET", f"/artists/{artist_id}/related-artists")
-    if resp.status_code != 200:
-        return f"Error: {resp.status_code} — {resp.text}"
-    artists = resp.json().get("artists", [])
-    lines = [f"Related artists ({len(artists)}):\n"]
-    for i, a in enumerate(artists[:15], 1):
-        genres = ", ".join(a.get("genres", [])[:3])
-        lines.append(
-            f"{i}. **{a['name']}** — {genres}\n"
-            f"   ID: `{a['id']}` | Popularity: {a.get('popularity', '?')}/100"
-        )
-    return "\n".join(lines)
-
-
-@server.tool()
 def spotify_create_playlist(
     name: str,
     description: str = "",
@@ -306,19 +264,6 @@ def spotify_recently_played(limit: int = 10) -> str:
         artists = ", ".join(a["name"] for a in t.get("artists", []))
         lines.append(f"{i}. **{t['name']}** by {artists} — `{t['uri']}`")
     return "\n".join(lines)
-
-
-@server.tool()
-def spotify_save_tracks(track_ids: list[str]) -> str:
-    """Save tracks to your library (Like).
-
-    Args:
-        track_ids: List of Spotify track IDs
-    """
-    resp = _api("PUT", "/me/tracks", json={"ids": track_ids})
-    if resp.status_code == 200:
-        return f"Saved {len(track_ids)} track(s) to library."
-    return f"Error: {resp.status_code} — {resp.text}"
 
 
 @server.tool()
