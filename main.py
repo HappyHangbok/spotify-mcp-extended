@@ -123,39 +123,43 @@ def spotify_get_queue() -> str:
 
 
 @server.tool()
-def spotify_get_recommendations(
-    seed_tracks: list[str] | None = None,
-    seed_artists: list[str] | None = None,
-    seed_genres: list[str] | None = None,
-    limit: int = 10,
-) -> str:
-    """Get track recommendations based on seeds.
+def spotify_get_artist_top_tracks(artist_id: str) -> str:
+    """Get an artist's top tracks (useful for finding similar music).
 
     Args:
-        seed_tracks: List of Spotify track IDs (max 5 total seeds)
-        seed_artists: List of Spotify artist IDs (max 5 total seeds)
-        seed_genres: List of genre names (max 5 total seeds)
-        limit: Number of recommendations (1-100, default 10)
+        artist_id: Spotify artist ID
     """
-    params: dict[str, Any] = {"limit": min(max(limit, 1), 100)}
-    if seed_tracks:
-        params["seed_tracks"] = ",".join(seed_tracks)
-    if seed_artists:
-        params["seed_artists"] = ",".join(seed_artists)
-    if seed_genres:
-        params["seed_genres"] = ",".join(seed_genres)
-    if not any(k.startswith("seed_") for k in params):
-        return "Error: At least one seed (tracks, artists, or genres) is required."
-    resp = _api("GET", "/recommendations", params=params)
+    resp = _api("GET", f"/artists/{artist_id}/top-tracks")
     if resp.status_code != 200:
         return f"Error: {resp.status_code} — {resp.text}"
     tracks = resp.json().get("tracks", [])
-    lines = [f"Recommendations ({len(tracks)} tracks):\n"]
+    lines = [f"Top tracks ({len(tracks)}):\n"]
     for i, t in enumerate(tracks, 1):
         artists = ", ".join(a["name"] for a in t.get("artists", []))
         lines.append(
             f"{i}. **{t['name']}** by {artists}\n"
-            f"   URI: `{t['uri']}`"
+            f"   URI: `{t['uri']}` | Popularity: {t.get('popularity', '?')}/100"
+        )
+    return "\n".join(lines)
+
+
+@server.tool()
+def spotify_get_related_artists(artist_id: str) -> str:
+    """Get artists related to a given artist.
+
+    Args:
+        artist_id: Spotify artist ID
+    """
+    resp = _api("GET", f"/artists/{artist_id}/related-artists")
+    if resp.status_code != 200:
+        return f"Error: {resp.status_code} — {resp.text}"
+    artists = resp.json().get("artists", [])
+    lines = [f"Related artists ({len(artists)}):\n"]
+    for i, a in enumerate(artists[:15], 1):
+        genres = ", ".join(a.get("genres", [])[:3])
+        lines.append(
+            f"{i}. **{a['name']}** — {genres}\n"
+            f"   ID: `{a['id']}` | Popularity: {a.get('popularity', '?')}/100"
         )
     return "\n".join(lines)
 
@@ -239,8 +243,9 @@ def spotify_my_playlists(limit: int = 20) -> str:
     playlists = resp.json().get("items", [])
     lines = [f"Your playlists ({len(playlists)}):\n"]
     for i, p in enumerate(playlists, 1):
+        track_count = p.get("tracks", {}).get("total", "?")
         lines.append(
-            f"{i}. **{p['name']}** — {p['tracks']['total']} tracks\n"
+            f"{i}. **{p['name']}** — {track_count} tracks\n"
             f"   ID: `{p['id']}` | URI: `{p['uri']}`"
         )
     return "\n".join(lines)
@@ -258,7 +263,7 @@ def spotify_shuffle(state: bool, device_id: str | None = None) -> str:
     if device_id:
         params["device_id"] = device_id
     resp = _api("PUT", "/me/player/shuffle", params=params)
-    if resp.status_code == 204:
+    if resp.status_code in (200, 204):
         return f"Shuffle {'on' if state else 'off'}"
     return f"Error: {resp.status_code} — {resp.text}"
 
@@ -277,7 +282,7 @@ def spotify_repeat(state: str, device_id: str | None = None) -> str:
     if device_id:
         params["device_id"] = device_id
     resp = _api("PUT", "/me/player/repeat", params=params)
-    if resp.status_code == 204:
+    if resp.status_code in (200, 204):
         return f"Repeat: {state}"
     return f"Error: {resp.status_code} — {resp.text}"
 
@@ -314,16 +319,6 @@ def spotify_save_tracks(track_ids: list[str]) -> str:
     if resp.status_code == 200:
         return f"Saved {len(track_ids)} track(s) to library."
     return f"Error: {resp.status_code} — {resp.text}"
-
-
-@server.tool()
-def spotify_available_genres() -> str:
-    """Get available genre seeds for recommendations."""
-    resp = _api("GET", "/recommendations/available-genre-seeds")
-    if resp.status_code != 200:
-        return f"Error: {resp.status_code} — {resp.text}"
-    genres = resp.json().get("genres", [])
-    return f"Available genres ({len(genres)}):\n" + ", ".join(genres)
 
 
 @server.tool()
